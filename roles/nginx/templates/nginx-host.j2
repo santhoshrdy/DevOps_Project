@@ -1,0 +1,35 @@
+# For HTTP Only
+
+# server {
+#  listen 80 default_server;
+
+#  root /usr/share/mysite;
+#  index index.html;
+
+#  server_name localhost;
+
+#  location / {
+#    try_files $uri $uri/ =404;
+#  }
+#}
+
+
+server {
+    listen 80;
+   server_name www.domain.com domain.com;
+
+    # redirects both www and non-www to ssl port with http (NOT HTTPS, forcing error 497)
+    return 301 http://domain.com$request_uri;
+}
+server {
+    listen 433 ssl http2 default_server;
+    listen [::]:443 ssl http2 default_server;
+
+    server_name domain.com;
+    error_page 497 https://domain.com$request_uri;
+
+    include snippets/ssl-domain.com.conf;
+    include snippets/ssl-params.conf;
+
+    # other vhost configuration
+}  

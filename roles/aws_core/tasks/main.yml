@@ -1,0 +1,63 @@
+---
+# tasks file for aws_core
+
+- name: create vpc
+  ec2_vpc:
+    state: present
+    cidr_block: 10.0.1.0/24
+    resource_tags: { "Name":" {{ app_name }}" }
+    subnets: "{{ vpc_subnets }}"       
+    internet_gateway: True
+    route_tables: "{{ route_tables }}"
+    region: "{{ region }}"
+    wait: yes
+  register: vpc
+
+- name: create admin access security group
+  ec2_group:
+    name: admin_access
+    description: SSH access
+    region: "{{ region }}"
+    vpc_id: "{{ vpc.vpc_id }}"
+    rules:
+      - proto: tcp
+        from_port: 22
+        to_port: 22
+        cidr_ip: 0.0.0.0/0
+  tags: security_groups
+  register: admin_access_group
+
+- name: create app security group
+  ec2_group:
+    name: "{{ app_name }}"
+    description: "{{ app_name }} web access"
+    region: "{{ region }}"
+    rules:
+      - proto: tcp
+        from_port: 80
+        to_port: 80
+        cidr_ip: 0.0.0.0/0
+    vpc_id: "{{ vpc.vpc_id }}"
+  tags: security_groups
+  register: app_security_group
+
+- name: launch load balancer
+  ec2_elb_lb:
+    name: "{{ lb_name }}"
+    region: "{{ region }}"
+    state: present
+    subnets: "{{ asg_subnets }}"
+    connection_draining_timeout: 60
+    security_group_ids: "{{ app_security_group.group_id }}"
+    listeners:
+      - protocol: http # options are http, https, ssl, tcp
+        load_balancer_port: 80
+        instance_port: 80
+        proxy_protocol: True
+      - protocol: https
+        load_balancer_port: 443
+        instance_protocol: http # optional, defaults to value of protocol setting
+        instance_port: 443
+        # ssl certificate required for https or ssl
+        ssl_certificate_id: "arn:aws:iam::123456789012:server-certificate/company/servercerts/ProdServerCert"
+  register: load_balancer
